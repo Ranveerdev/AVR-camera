@@ -3,7 +3,7 @@
 **Author:** Ranveer Saluja (16)  
 **Microcontroller:** ATmega168 (16MHz)  
 **Date:** May 2026  
-**Target Application:** Embedded systems portfolio demonstrating 12 LPA+ firmware capabilities
+**Target Application:** Embedded systems portfolio.
 
 ---
 
