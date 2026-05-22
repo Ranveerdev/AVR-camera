@@ -283,8 +283,6 @@ int main(void) {
 				break;
 				
 			case CAMERA_END:
-				raw_array[12] = {0}; //reset for next data
-				refined_array[100] = {0};
 				ADC_timeout = 0;
 				first_conversion = 1;
 
