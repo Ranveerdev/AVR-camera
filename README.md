@@ -264,4 +264,4 @@ ATmega168 Datasheet (Microchip, 2018)
 
 "Charlieplexing for AVR" – Microchip Application Note AVR1250
 
-Built by Ranveer Saluja, age 16. No AI. No copy-paste. Just datasheets and persistence.
+Built by Ranveer Saluja, No AI. No copy-paste. Just datasheets.
