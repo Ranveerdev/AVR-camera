@@ -9,7 +9,7 @@
 
 ## 📷 Overview
 
-This project implements a **complete embedded camera system** using 12 LDR sensors arranged in a 3×4 grid, capturing 10×10 pixel grayscale images (100 pixels). The firmware is entirely **bare-metal** – no Arduino HAL, no third-party libraries. Every register write, timer calculation, and interrupt handler was written from scratch using only the ATmega168 datasheet.
+This project implements a **complete embedded camera system** using 12 LDR sensors arranged in a 3×4 grid, then using interpolation to produce capturing 10×10 pixel grayscale images (100 pixels). The firmware is entirely **bare-metal** – no Arduino HAL, no third-party libraries. Every register write, timer calculation, and interrupt handler was written from scratch using only the ATmega168 datasheet.
 
 **Why this matters:** This is not a tutorial project. This is production-grade firmware demonstrating:
 - Cycle-accurate timing analysis
