@@ -2,78 +2,73 @@ import serial
 import serial.tools.list_ports
 import numpy as np
 from PIL import Image
-import time
+import os
 from datetime import datetime
 
-def capture_image(port=None, baudrate=9600, timeout=30):
-    """Passive listener — waits for UART data and saves first complete frame"""
+def capture_raw_binary_frame(port=None, baudrate=9600, timeout=40):
+    """Passive binary listener designed for bare-metal UDR0 byte streams."""
     
     if port is None:
         ports = serial.tools.list_ports.comports()
         for p in ports:
-            if 'Arduino' in p.description or 'USB Serial' in p.description or 'CH340' in p.description:
+            if any(x in p.description for x in ['Arduino', 'USB Serial', 'CH340', 'FTDI', 'CP210x']):
                 port = p.device
                 break
     
     if port is None:
-        print("Could not find device.")
+        print("[-] Target AVR hardware link not found on any subsystem port.")
         return False
     
-    print(f"Listening on {port}...")
-    ser = serial.Serial(port, baudrate, timeout=timeout)
-    time.sleep(2)
+    print(f"[+] Attaching to binary stream on port: {port}")
     
-    raw_values = []
-    upscaled_values = []
-    reading_raw = False
-    reading_upscaled = False
+    try:
+        # Open port with full 8-bit binary capability, matching your UCSR0C settings
+        ser = serial.Serial(
+            port=port, 
+            baudrate=baudrate, 
+            bytesize=serial.EIGHTBITS, 
+            parity=serial.PARITY_NONE, 
+            stopbits=serial.STOPBITS_ONE, 
+            timeout=timeout
+        )
+    except Exception as e:
+        print(f"[-] Failed to latch onto serial hardware: {e}")
+        return False
+
+    print("[*] Port bound. Waiting for physical button trigger on PD7...")
     
-    print("Waiting for data...")
-    start = time.time()
-    
-    while (len(raw_values) < 12 or len(upscaled_values) < 100) and (time.time() - start) < timeout:
-        if ser.in_waiting:
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
-            
-            if not line:
-                continue
-            
-            if line == "RAW_3x4":
-                reading_raw = True
-                reading_upscaled = False
-                print("Raw data started")
-            elif line == "UPSCALED_10x10":
-                reading_upscaled = True
-                reading_raw = False
-                print("Upscaled data started")
-            else:
-                try:
-                    value = int(line)
-                    if reading_raw and len(raw_values) < 12:
-                        raw_values.append(value)
-                    elif reading_upscaled and len(upscaled_values) < 100:
-                        upscaled_values.append(value)
-                except ValueError:
-                    pass  # ignore non-numeric lines
-    
-    ser.close()
-    
-    if len(raw_values) == 12 and len(upscaled_values) == 100:
-        import os
+    try:
+        # CRITICAL FIX: Read exactly 100 raw binary bytes straight from UDR0
+        # This completely bypasses readline() and decode() to prevent encoding crashes
+        raw_binary_data = ser.read(100)
+        
+    finally:
+        ser.close()
+        print("[*] Serial channel safely decoupled.")
+
+    # Frame validation check
+    received_bytes = len(raw_binary_data)
+    if received_bytes == 100:
         os.makedirs("captures", exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        img_array = np.array(upscaled_values, dtype=np.uint8).reshape(10, 10)
-        img_scaled = np.repeat(np.repeat(img_array, 40, axis=0), 40, axis=1)
-        img = Image.fromarray(img_scaled, mode='L')
-        filename = f"captures/image_{timestamp}.bmp"
-        img.save(filename)
+        # Convert raw binary stream directly into a NumPy uint8 matrix array
+        img_array = np.frombuffer(raw_binary_data, dtype=np.uint8).reshape(10, 10)
         
-        print(f"Image saved: {filename}")
+        # Process visual output frame using smooth bilinear scaling 
+        # to respect the math behind your cubic interpolation algorithm
+        img_initial = Image.fromarray(img_array, mode='L')
+        img_smooth = img_initial.resize((400, 400), resample=Image.Resampling.BILINEAR)
+        
+        filename = f"captures/image_{timestamp}.bmp"
+        img_smooth.save(filename)
+        
+        print(f"[+] Frame committed successfully to storage: {filename}")
         return True
     else:
-        print(f"Incomplete: raw={len(raw_values)}, upscaled={len(upscaled_values)}")
+        print(f"[-] Frame fragmentation detected. Received {received_bytes}/100 bytes.")
+        print("[-] Ensure you pressed the hardware button completely to trigger the transmission state.")
         return False
 
 if __name__ == "__main__":
-    capture_image()
+    capture_raw_binary_frame()
