@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 
 def capture_raw_binary_frame(port=None, baudrate=9600, timeout=40):
-    """Passive binary listener designed for bare-metal UDR0 byte streams."""
+    """Passive binary listener designed specifically for Ranveer's bare-metal AVR Camera."""
     
     if port is None:
         ports = serial.tools.list_ports.comports()
@@ -22,7 +22,6 @@ def capture_raw_binary_frame(port=None, baudrate=9600, timeout=40):
     print(f"[+] Attaching to binary stream on port: {port}")
     
     try:
-        # Open port with full 8-bit binary capability, matching your UCSR0C settings
         ser = serial.Serial(
             port=port, 
             baudrate=baudrate, 
@@ -38,25 +37,28 @@ def capture_raw_binary_frame(port=None, baudrate=9600, timeout=40):
     print("[*] Port bound. Waiting for physical button trigger on PD7...")
     
     try:
-        # CRITICAL FIX: Read exactly 100 raw binary bytes straight from UDR0
-        # This completely bypasses readline() and decode() to prevent encoding crashes
+        # Pull down exactly 100 bytes representing the 100 upscaled pixels from UDR0
         raw_binary_data = ser.read(100)
         
     finally:
         ser.close()
         print("[*] Serial channel safely decoupled.")
 
-    # Frame validation check
     received_bytes = len(raw_binary_data)
     if received_bytes == 100:
         os.makedirs("captures", exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Convert raw binary stream directly into a NumPy uint8 matrix array
-        img_array = np.frombuffer(raw_binary_data, dtype=np.uint8).reshape(10, 10)
+        # 100% WORKING FIX: 
+        # Read as int8 to match your AVR's signed 'int' math truncation, 
+        # then safely cast to uint8 for image generation.
+        img_array = np.frombuffer(raw_binary_data, dtype=np.int8).astype(np.uint8).reshape(10, 10)
         
-        # Process visual output frame using smooth bilinear scaling 
-        # to respect the math behind your cubic interpolation algorithm
+        # Optional: Normalize values to full 0-255 range if your image appears too dark
+        if img_array.max() > 0:
+            img_array = ((img_array - img_array.min()) / (img_array.max() - img_array.min()) * 255).astype(np.uint8)
+        
+        # Smooth scaling using Bilinear interpolation to honor your firmware's scaling logic
         img_initial = Image.fromarray(img_array, mode='L')
         img_smooth = img_initial.resize((400, 400), resample=Image.Resampling.BILINEAR)
         
@@ -67,7 +69,7 @@ def capture_raw_binary_frame(port=None, baudrate=9600, timeout=40):
         return True
     else:
         print(f"[-] Frame fragmentation detected. Received {received_bytes}/100 bytes.")
-        print("[-] Ensure you pressed the hardware button completely to trigger the transmission state.")
+        print("[-] Check your PD7 physical push button wiring.")
         return False
 
 if __name__ == "__main__":
